@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Duck Debug — your rubber-duck debugger</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header>
+  <img src="duck.svg" alt="Duck Debug logo" class="logo">
+  <div>
+    <h1>Duck Debug</h1>
+    <p class="tagline">Stuck on an error? Quack it out with the duck.</p>
+  </div>
+</header>
+
+<main>
+  <section id="history" aria-live="polite">
+    <div class="empty-state" id="empty-state">
+      <img src="duck.svg" alt="duck" class="big-duck">
+      <p>Hi! I'm <strong>Duck</strong>. Paste your broken code and the error message, and I'll explain what went wrong in plain language.</p>
+      <button id="try-sample" class="link-btn">Try a sample broken program</button>
+    </div>
+  </section>
+
+  <section id="setup-card" class="hidden">
+    <h2>The duck needs a brain</h2>
+    <p>Duck Debug answers with Google's Gemini API. It's free to start:</p>
+    <ol>
+      <li>Get a free API key at <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">Google AI Studio</a>.</li>
+      <li>Copy <code>.env.example</code> to <code>.env</code> and paste your key after <code>GEMINI_API_KEY=</code>.</li>
+      <li>Restart the server with <code>npm start</code>.</li>
+    </ol>
+  </section>
+
+  <section id="composer">
+    <div class="inputs">
+      <label>
+        Paste your code here
+        <textarea id="code" rows="8" maxlength="6000" placeholder="def greet(name)&#10;    print(&quot;Hello &quot; + name)&#10;&#10;greet()"></textarea>
+        <span class="counter"><span id="code-count">0</span>/6000</span>
+      </label>
+      <label>
+        Error message (optional)
+        <textarea id="error" rows="4" maxlength="6000" placeholder="TypeError: greet() missing 1 required positional argument: 'name'"></textarea>
+        <span class="counter"><span id="error-count">0</span>/6000</span>
+      </label>
+    </div>
+    <div class="actions">
+      <select id="language" aria-label="Programming language">
+        <option>Python</option>
+        <option>JavaScript</option>
+        <option>Java</option>
+        <option>C++</option>
+        <option>Other</option>
+      </select>
+      <button id="ask" class="primary">Ask the Duck</button>
+      <button id="clear" class="ghost">Clear chat</button>
+    </div>
+    <p id="form-error" class="form-error hidden"></p>
+  </section>
+</main>
+
+<footer>
+  <p>Built for the Devpost "Build With AI: Basics" hackathon.</p>
+</footer>
+
+<script src="app.js"></script>
+</body>
+</html>
