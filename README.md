@@ -37,7 +37,7 @@ No key? The app tells you exactly how to set one up instead of crashing.
 
 ## Demo video
 
-(Link to be added before submission.)
+https://www.youtube.com/watch?v=cuCroIKtxFM
 
 ## License
 
