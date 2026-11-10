@@ -36,6 +36,26 @@ $("try-sample")?.addEventListener("click", () => {
   updateCounts();
 });
 
+// Sample answer: shows a real recorded answer from the Nov 10, 2026
+// evaluation (data/eval-sessions.json), so the duck can be tried with no
+// API key. It is labeled as a sample, never presented as a live answer.
+$("show-sample-answer")?.addEventListener("click", async () => {
+  const btn = $("show-sample-answer");
+  btn.disabled = true;
+  try {
+    const res = await fetch("/api/insights");
+    const data = await res.json();
+    const sample = data.evalSessions && data.evalSessions[0];
+    if (!sample || !sample.reply) throw new Error("No sample answer available yet.");
+    addMessage("user", "Sample: average of an empty list (Python)");
+    addMessage("duck", "Sample answer, recorded Nov 10, 2026:\n\n" + sample.reply);
+  } catch (e) {
+    addMessage("duck", "Could not load a sample answer. " + e.message);
+  } finally {
+    btn.disabled = false;
+  }
+});
+
 $("clear").addEventListener("click", () => {
   history.innerHTML = "";
   history.append(emptyState);
