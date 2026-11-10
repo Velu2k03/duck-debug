@@ -1,5 +1,6 @@
 require("dotenv").config();
 const express = require("express");
+const fs = require("fs");
 const path = require("path");
 
 const app = express();
@@ -9,6 +10,79 @@ const GEMINI_KEY = process.env.GEMINI_API_KEY || "";
 const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-3.1-flash-lite";
 const GEMINI_URL = (model) =>
   `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
+
+// Error Insights (added Nov 10, 2026 for DATANOVA): the app logs only
+// session metadata, never pasted code. The bundled data/eval-sessions.json
+// holds real evaluation sessions run Nov 10, 2026; data/sessions.jsonl holds
+// live sessions logged at runtime. Both feed GET /api/insights.
+const DATA_DIR = path.join(__dirname, "data");
+const SESSIONS_FILE = path.join(DATA_DIR, "sessions.jsonl");
+const EVAL_FILE = path.join(DATA_DIR, "eval-sessions.json");
+
+function errorSignature(error) {
+  const first = String(error || "").split("\n")[0].trim();
+  return first.slice(0, 120);
+}
+
+function logSession(entry) {
+  try {
+    fs.mkdirSync(DATA_DIR, { recursive: true });
+    fs.appendFileSync(SESSIONS_FILE, JSON.stringify(entry) + "\n");
+  } catch (_) {
+    // Logging must never break the API (serverless filesystems are read-only).
+  }
+}
+
+function loadSessions() {
+  let sessions = [];
+  try {
+    const evalSessions = JSON.parse(fs.readFileSync(EVAL_FILE, "utf8"));
+    if (Array.isArray(evalSessions)) sessions = sessions.concat(evalSessions);
+  } catch (_) {}
+  try {
+    const lines = fs.readFileSync(SESSIONS_FILE, "utf8").split("\n").filter(Boolean);
+    for (const line of lines) {
+      try { sessions.push(JSON.parse(line)); } catch (_) {}
+    }
+  } catch (_) {}
+  return sessions;
+}
+
+function summarizeInsights(sessions) {
+  const byLanguage = {};
+  const errorCounts = {};
+  const outcomes = {};
+  const latencies = [];
+  let namedLine = 0;
+  let okCount = 0;
+  for (const s of sessions) {
+    byLanguage[s.language || "Unknown"] = (byLanguage[s.language || "Unknown"] || 0) + 1;
+    if (s.errorSig) errorCounts[s.errorSig] = (errorCounts[s.errorSig] || 0) + 1;
+    outcomes[s.outcome || "unknown"] = (outcomes[s.outcome || "unknown"] || 0) + 1;
+    if (s.outcome === "ok") {
+      okCount += 1;
+      if (typeof s.latencyMs === "number") latencies.push(s.latencyMs);
+      if (s.namedLine) namedLine += 1;
+    }
+  }
+  latencies.sort((a, b) => a - b);
+  const medianLatencyMs = latencies.length
+    ? latencies[Math.floor(latencies.length / 2)]
+    : null;
+  const topErrors = Object.entries(errorCounts)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 5)
+    .map(([error, count]) => ({ error, count }));
+  return {
+    totalSessions: sessions.length,
+    okSessions: okCount,
+    pctNamedLine: okCount ? Math.round((namedLine / okCount) * 100) : null,
+    medianLatencyMs,
+    byLanguage,
+    topErrors,
+    outcomes,
+  };
+}
 
 app.use(express.json({ limit: "1mb" }));
 app.use(express.static(path.join(__dirname, "public")));
@@ -91,22 +165,58 @@ function friendlyError(err) {
 }
 
 app.post("/api/ask", async (req, res) => {
+  const started = Date.now();
   const { code, error, language } = req.body || {};
+  const lang = language || "Python";
+  const record = (outcome, replyText) => {
+    logSession({
+      ts: new Date().toISOString(),
+      language: lang,
+      errorSig: errorSignature(error),
+      hasError: Boolean(String(error || "").trim()),
+      outcome,
+      latencyMs: Date.now() - started,
+      namedLine: typeof replyText === "string" && replyText.includes("The line:"),
+      source: "live",
+    });
+  };
   if (!code || !String(code).trim()) {
+    record("invalid");
     return res.status(400).json({ error: "The duck needs some code to look at first. Paste your code above!" });
   }
   if (String(code).length > MAX_CHARS || String(error || "").length > MAX_CHARS) {
+    record("invalid");
     return res.status(400).json({ error: `Whoa, that's a lot of code. Keep each box under ${MAX_CHARS} characters.` });
   }
   if (!GEMINI_KEY) {
+    record("no-key");
     return res.status(503).json({ error: SETUP_MESSAGE, setup: true });
   }
   try {
-    const reply = await askGemini({ code, error, language: language || "Python" });
+    const reply = await askGemini({ code, error, language: lang });
+    record("ok", reply);
     res.json({ reply });
   } catch (err) {
+    record("api-error");
     res.status(502).json({ error: friendlyError(err) });
   }
+});
+
+app.get("/api/insights", (req, res) => {
+  const sessions = loadSessions();
+  const evalSessions = sessions.filter((s) => s.source === "eval-2026-11-10");
+  res.json({
+    summary: summarizeInsights(sessions),
+    evalSessions: evalSessions.map((s) => ({
+      language: s.language,
+      errorSig: s.errorSig,
+      outcome: s.outcome,
+      latencyMs: s.latencyMs,
+      namedLine: s.namedLine,
+      reply: s.reply || null,
+    })),
+    note: "Insights count session metadata only. Pasted code is never logged or stored.",
+  });
 });
 
 app.get("/api/health", (req, res) => {

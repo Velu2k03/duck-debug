@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Error Insights — Duck Debug</title>
+<link rel="stylesheet" href="style.css">
+<style>
+  .stats { display: flex; flex-wrap: wrap; gap: 12px; margin: 16px 0; }
+  .stat { background: #fff8e7; border: 1px solid #e8dcc0; border-radius: 12px; padding: 12px 16px; min-width: 130px; }
+  .stat b { display: block; font-size: 1.6em; }
+  .stat span { font-size: 0.85em; color: #6b5d3f; }
+  .sample { background: #fff; border: 1px solid #e8dcc0; border-radius: 12px; padding: 12px 16px; margin: 12px 0; }
+  .sample h3 { margin: 0 0 4px; }
+  .sample pre { white-space: pre-wrap; font-family: inherit; margin: 8px 0 0; }
+  .meta { font-size: 0.85em; color: #6b5d3f; }
+</style>
+</head>
+<body>
+<header>
+  <img src="duck.svg" alt="Duck Debug logo" class="logo">
+  <div>
+    <h1>Error Insights</h1>
+    <p class="tagline">What the duck is learning from real debug sessions.</p>
+  </div>
+</header>
+
+<main>
+  <p><a href="/">Back to the duck</a></p>
+  <div id="loading">Loading insights…</div>
+  <div id="content" class="hidden">
+    <section class="stats" id="stats"></section>
+    <section>
+      <h2>Sessions by language</h2>
+      <ul id="by-language"></ul>
+    </section>
+    <section>
+      <h2>Most common errors</h2>
+      <ol id="top-errors"></ol>
+    </section>
+    <section>
+      <h2>Evaluation sessions — Nov 10, 2026</h2>
+      <p class="meta">Eight real debug sessions run against the Gemini API with the duck's exact prompt. Replies are the model's real answers. Pasted code is never logged; only this metadata is stored.</p>
+      <div id="samples"></div>
+    </section>
+  </div>
+  <p id="error" class="form-error hidden"></p>
+</main>
+
+<footer>
+  <p>Duck Debug — Error Insights. Only session metadata is logged, never your code.</p>
+</footer>
+
+<script>
+async function load() {
+  try {
+    const res = await fetch("/api/insights");
+    const data = await res.json();
+    document.getElementById("loading").remove();
+    document.getElementById("content").classList.remove("hidden");
+    const s = data.summary;
+    const stats = [
+      [s.totalSessions, "sessions logged"],
+      [s.okSessions, "answered OK"],
+      [s.pctNamedLine === null ? "–" : s.pctNamedLine + "%", "replies named the line"],
+      [s.medianLatencyMs === null ? "–" : (s.medianLatencyMs / 1000).toFixed(1) + "s", "median answer time"],
+    ];
+    document.getElementById("stats").innerHTML = stats.map(([v, l]) =>
+      `<div class="stat"><b>${v}</b><span>${l}</span></div>`).join("");
+    document.getElementById("by-language").innerHTML = Object.entries(s.byLanguage)
+      .sort((a, b) => b[1] - a[1])
+      .map(([lang, n]) => `<li>${lang}: ${n}</li>`).join("") || "<li>No sessions yet.</li>";
+    document.getElementById("top-errors").innerHTML = s.topErrors.length
+      ? s.topErrors.map((e) => `<li>${e.error} (${e.count})</li>`).join("")
+      : "<li>No errors logged yet.</li>";
+    document.getElementById("samples").innerHTML = data.evalSessions.length
+      ? data.evalSessions.map((ev) => {
+          const div = document.createElement("div");
+          div.className = "sample";
+          const h = document.createElement("h3");
+          h.textContent = `${ev.language} — ${ev.errorSig}`;
+          const m = document.createElement("p");
+          m.className = "meta";
+          m.textContent = `Outcome: ${ev.outcome} · ${ev.latencyMs === null ? "" : (ev.latencyMs / 1000).toFixed(1) + "s"} · Named the line: ${ev.namedLine ? "yes" : "no"}`;
+          const pre = document.createElement("pre");
+          pre.textContent = ev.reply || "(no reply recorded)";
+          div.append(h, m, pre);
+          return div.outerHTML;
+        }).join("")
+      : "<p>No evaluation sessions yet.</p>";
+  } catch (e) {
+    document.getElementById("loading").remove();
+    const el = document.getElementById("error");
+    el.textContent = "Could not load insights. " + e.message;
+    el.classList.remove("hidden");
+  }
+}
+load();
+</script>
+</body>
+</html>
