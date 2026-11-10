@@ -1,0 +1,1 @@
+{"eval_date":"2026-11-10","median_latency_ms":2303,"model":"gemini-3.1-flash-lite","named_line":8,"notes":"All 8 real sessions answered OK and named the faulty line (100%). Languages: Python 4, JavaScript 2, Java 1, C++ 1. Median answer time 2.3s. Pasted code never logged; only session metadata (language, error signature, outcome, latency, line named).","ok":8,"sessions":8}
